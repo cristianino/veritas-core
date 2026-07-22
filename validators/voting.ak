@@ -89,21 +89,18 @@ validator voting(authority: ByteArray, deadline: Int, candidate_count: Int) {
 
   spend(
     _datum: Option<BallotDatum>,
-    redeemer: SpendAction,
+    _redeemer: SpendAction,
     _own_ref: OutputReference,
     self: Transaction,
   ) {
-    when redeemer is {
-      // La autoridad recupera las papeletas solo despues de la fecha limite.
-      Close -> {
-        let signed_by_authority = list.has(self.extra_signatories, authority)
-        let voting_closed = interval.is_entirely_after(
-          self.validity_range,
-          deadline,
-        )
-        signed_by_authority && voting_closed
-      }
-    }
+    // Solo existe una accion (Close): la autoridad recupera las papeletas
+    // una vez pasada la fecha limite.
+    let signed_by_authority = list.has(self.extra_signatories, authority)
+    let voting_closed = interval.is_entirely_after(
+      self.validity_range,
+      deadline,
+    )
+    signed_by_authority && voting_closed
   }
 
   else(_) {

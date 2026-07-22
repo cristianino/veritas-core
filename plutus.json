@@ -51,7 +51,7 @@
         }
       },
       "redeemer": {
-        "title": "redeemer",
+        "title": "_redeemer",
         "schema": {
           "$ref": "#/definitions/voting~1SpendAction"
         }
