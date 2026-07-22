@@ -60,11 +60,7 @@ fn is_valid_ballot(output: Output, script: PolicyId, candidate: Int) -> Bool {
 ///   - `authority`: quien organiza la eleccion (emite tokens y cierra).
 ///   - `deadline`: instante limite (POSIX ms); despues no se puede votar.
 ///   - `candidate_count`: cantidad de candidatos; los votos validos van de 0 a n-1.
-validator voting(
-  authority: ByteArray,
-  deadline: Int,
-  candidate_count: Int,
-) {
+validator voting(authority: ByteArray, deadline: Int, candidate_count: Int) {
   mint(redeemer: MintAction, policy_id: PolicyId, self: Transaction) {
     let voting_open = interval.is_entirely_before(self.validity_range, deadline)
 
@@ -73,22 +69,19 @@ validator voting(
       // y debe crear al menos un token de votante.
       Issue -> {
         let signed_by_authority = list.has(self.extra_signatories, authority)
-        let mints_voter_tokens =
-          quantity_of(self.mint, policy_id, voter_asset) > 0
+        let mints_voter_tokens = quantity_of(self.mint, policy_id, voter_asset) > 0
         voting_open && signed_by_authority && mints_voter_tokens
       }
 
       // Votar: quemar exactamente 1 token, candidato valido, votacion abierta,
       // y producir exactamente una papeleta correcta en el propio script.
       Cast { candidate } -> {
-        let burns_one_token =
-          quantity_of(self.mint, policy_id, voter_asset) == -1
+        let burns_one_token = quantity_of(self.mint, policy_id, voter_asset) == -1
         let valid_candidate = candidate >= 0 && candidate < candidate_count
-        let ballots =
-          list.count(
-            self.outputs,
-            fn(output) { is_valid_ballot(output, policy_id, candidate) },
-          )
+        let ballots = list.count(
+          self.outputs,
+          fn(output) { is_valid_ballot(output, policy_id, candidate) },
+        )
         voting_open && burns_one_token && valid_candidate && ballots == 1
       }
     }
@@ -104,7 +97,10 @@ validator voting(
       // La autoridad recupera las papeletas solo despues de la fecha limite.
       Close -> {
         let signed_by_authority = list.has(self.extra_signatories, authority)
-        let voting_closed = interval.is_entirely_after(self.validity_range, deadline)
+        let voting_closed = interval.is_entirely_after(
+          self.validity_range,
+          deadline,
+        )
         signed_by_authority && voting_closed
       }
     }
@@ -141,13 +137,12 @@ fn ballot_output(candidate: Int) -> Output {
 }
 
 test cast_valid_vote() {
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      mint: assets.from_asset(test_policy, voter_asset, -1),
-      outputs: [ballot_output(1)],
-      validity_range: interval.entirely_before(test_deadline),
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    mint: assets.from_asset(test_policy, voter_asset, -1),
+    outputs: [ballot_output(1)],
+    validity_range: interval.entirely_before(test_deadline),
+  }
   voting.mint(
     test_authority,
     test_deadline,
@@ -159,13 +154,12 @@ test cast_valid_vote() {
 }
 
 test cast_rejects_invalid_candidate() {
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      mint: assets.from_asset(test_policy, voter_asset, -1),
-      outputs: [ballot_output(9)],
-      validity_range: interval.entirely_before(test_deadline),
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    mint: assets.from_asset(test_policy, voter_asset, -1),
+    outputs: [ballot_output(9)],
+    validity_range: interval.entirely_before(test_deadline),
+  }
   !voting.mint(
     test_authority,
     test_deadline,
@@ -177,13 +171,12 @@ test cast_rejects_invalid_candidate() {
 }
 
 test cast_rejects_without_burning_token() {
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      mint: assets.zero,
-      outputs: [ballot_output(1)],
-      validity_range: interval.entirely_before(test_deadline),
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    mint: assets.zero,
+    outputs: [ballot_output(1)],
+    validity_range: interval.entirely_before(test_deadline),
+  }
   !voting.mint(
     test_authority,
     test_deadline,
@@ -196,13 +189,12 @@ test cast_rejects_without_burning_token() {
 
 test cast_rejects_datum_candidate_mismatch() {
   // El votante dice votar por 1 pero la papeleta guarda 2: debe fallar.
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      mint: assets.from_asset(test_policy, voter_asset, -1),
-      outputs: [ballot_output(2)],
-      validity_range: interval.entirely_before(test_deadline),
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    mint: assets.from_asset(test_policy, voter_asset, -1),
+    outputs: [ballot_output(2)],
+    validity_range: interval.entirely_before(test_deadline),
+  }
   !voting.mint(
     test_authority,
     test_deadline,
@@ -214,13 +206,12 @@ test cast_rejects_datum_candidate_mismatch() {
 }
 
 test cast_rejects_after_deadline() {
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      mint: assets.from_asset(test_policy, voter_asset, -1),
-      outputs: [ballot_output(1)],
-      validity_range: interval.entirely_after(test_deadline),
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    mint: assets.from_asset(test_policy, voter_asset, -1),
+    outputs: [ballot_output(1)],
+    validity_range: interval.entirely_after(test_deadline),
+  }
   !voting.mint(
     test_authority,
     test_deadline,
@@ -232,24 +223,36 @@ test cast_rejects_after_deadline() {
 }
 
 test issue_requires_authority_signature() {
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      mint: assets.from_asset(test_policy, voter_asset, 5),
-      extra_signatories: [test_authority],
-      validity_range: interval.entirely_before(test_deadline),
-    }
-  voting.mint(test_authority, test_deadline, test_candidates, Issue, test_policy, tx)
+  let tx = Transaction {
+    ..transaction.placeholder,
+    mint: assets.from_asset(test_policy, voter_asset, 5),
+    extra_signatories: [test_authority],
+    validity_range: interval.entirely_before(test_deadline),
+  }
+  voting.mint(
+    test_authority,
+    test_deadline,
+    test_candidates,
+    Issue,
+    test_policy,
+    tx,
+  )
 }
 
 test issue_rejects_unauthorized() {
   // Nadie firmo como autoridad: la emision debe fallar.
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      mint: assets.from_asset(test_policy, voter_asset, 5),
-      extra_signatories: [],
-      validity_range: interval.entirely_before(test_deadline),
-    }
-  !voting.mint(test_authority, test_deadline, test_candidates, Issue, test_policy, tx)
+  let tx = Transaction {
+    ..transaction.placeholder,
+    mint: assets.from_asset(test_policy, voter_asset, 5),
+    extra_signatories: [],
+    validity_range: interval.entirely_before(test_deadline),
+  }
+  !voting.mint(
+    test_authority,
+    test_deadline,
+    test_candidates,
+    Issue,
+    test_policy,
+    tx,
+  )
 }
